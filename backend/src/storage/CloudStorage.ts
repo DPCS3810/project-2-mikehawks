@@ -21,7 +21,7 @@ export class CloudStorage {
             this.storage = new Storage();
         }
 
-        const bucketPrefix = process.env.GCS_BUCKET_PREFIX || 'image-editor';
+        const bucketPrefix = process.env.GCS_BUCKET_PREFIX || process.env.GCP_PROJECT_ID || 'image-editor';
         this.rawBucket = this.storage.bucket(`${bucketPrefix}-raw`);
         this.resultsBucket = this.storage.bucket(`${bucketPrefix}-results`);
         this.thumbBucket = this.storage.bucket(`${bucketPrefix}-thumb`);

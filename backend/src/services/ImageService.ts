@@ -41,6 +41,11 @@ export class ImageService {
         mimeType: string,
         sizeBytes: number
     ): Promise<{ image: ImageRecord; thumbnailUrl: string }> {
+        // Stateless mode: Force 'demo' user to ensure consistent paths without DB
+        if (process.env.SKIP_DB_CHECK === 'true') {
+            userId = 'demo';
+        }
+
         // Validate file size
         if (sizeBytes > 10 * 1024 * 1024) {
             throw new Error('Image too large (max 10 MB)');

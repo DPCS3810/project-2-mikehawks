@@ -11,6 +11,8 @@ const LOCAL_STORAGE_DIR = path.join(__dirname, '../../local-storage');
 const USE_LOCAL_STORAGE = !process.env.GCP_PROJECT_ID;
 
 export class RevisionService {
+    private statelessPathCache = new Map<string, string>();
+
     constructor(
         private db: PostgresClient,
         private storage: CloudStorage,
@@ -37,7 +39,8 @@ export class RevisionService {
             // Download source (assuming raw original for stateless simplicity or implementing a smart guess)
             // A better stateless approach would be: Client sends "sourceUrl" ? No, security.
             // Let's just download the raw image associated with imageId.
-            const sourcePath = `${imageId}.jpg`; // Assumption for demo
+            // In stateless mode, we force user='demo' so check there.
+            const sourcePath = `demo/${imageId}.jpg`;
 
             let sourceBuffer: Buffer;
             try {
@@ -45,11 +48,11 @@ export class RevisionService {
             } catch (e) {
                 // Try png
                 try {
-                    sourceBuffer = await this.storage.download('raw', `${imageId}.png`);
+                    sourceBuffer = await this.storage.download('raw', `demo/${imageId}.png`);
                 } catch (e2) {
                     // Try to find ANY match - tough without DB. 
                     // Let's rely on ImageService "getMetadata" mock which returned jpg.
-                    sourceBuffer = await this.storage.download('raw', `${imageId}.jpg`);
+                    sourceBuffer = await this.storage.download('raw', `demo/${imageId}.jpg`);
                 }
             }
 
@@ -66,6 +69,9 @@ export class RevisionService {
                 resultBuffer,
                 'image/jpeg' // Default
             );
+
+            // Cache for stateless getDownloadUrl lookup
+            this.statelessPathCache.set(revisionId, resultPath);
 
             // Mock Revision Record
             return {
@@ -206,9 +212,12 @@ export class RevisionService {
      */
     async getDownloadUrl(revisionId: string): Promise<string> {
         if (process.env.SKIP_DB_CHECK === 'true') {
-            // In stateless mode, we can't look up the path from ID.
-            // Accessing revisions might fail or we assume a path convention if we had one.
-            throw new Error("Retrieving specific revisions not supported in demo mode");
+            const path = this.statelessPathCache.get(revisionId);
+            if (!path) {
+                // Determine if we can reconstruct it from pattern if cache miss
+                throw new Error("Revision path not found in cache (stateless mode)");
+            }
+            return this.storage.getSignedUrl('results', path);
         }
         const revision = await this.db.getRevision(revisionId);
         if (!revision) {
